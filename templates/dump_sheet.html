@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Dump Sheet - AnydayTool{% endblock %} {# UMBENENNUNG #}
+
+{% block content %}
+<section class="form-container">
+    <h2>Neue Notiz hinzufügen (Dump Sheet)</h2>
+    <p>Schreiben Sie hier schnell alle Gedanken oder Informationen auf, die Sie später einordnen möchten. Das AnydayTool wird Sie später daran erinnern, diese Notizen zu kategorisieren.</p>
+    <form method="POST">
+        <input type="hidden" name="action" value="add_note">
+        <div class="form-group">
+            <label for="note_text">Ihre Notiz:</label>
+            <textarea id="note_text" name="note_text" rows="5" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Notiz speichern</button>
+    </form>
+</section>
+
+<section class="data-overview mt-4">
+    <h2>Unkategorisierte Notizen</h2>
+    {% if uncategorized_notes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Notiz</th>
+                    <th>Erstellt am</th>
+                    <th>Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for note in uncategorized_notes %}
+                    <tr>
+                        <td>{{ note.note_text }}</td>
+                        <td>{{ note.created_at }}</td>
+                        <td>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="action" value="mark_categorized">
+                                <input type="hidden" name="note_id" value="{{ note.id }}">
+                                <button type="submit" class="btn btn-success btn-small">Als kategorisiert markieren</button>
+                            </form>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="action" value="delete_note">
+                                <input type="hidden" name="note_id" value="{{ note.id }}">
+                                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Bist du sicher, dass du diese Notiz löschen möchtest?');">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Keine unkategorisierten Notizen vorhanden. Ihr Dump Sheet ist leer!</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - AnydayTool{% endblock %} {# UMBENENNUNG #}
+
+{% block content %}
+<section class="dashboard-header">
+    <h1>Willkommen zurück, {{ username }}!</h1>
+</section>
+
+<section class="dashboard-overview">
+    <div class="card">
+        <h3>Aktueller Gesamtvermögensstand</h3>
+        <p class="big-number">CHF {{ "%.2f"|format(current_total_balance) }}</p>
+        <a href="{{ url_for('manage_accounts') }}" class="btn btn-primary">Vermögen verwalten</a>
+    </div>
+
+    <div class="card">
+        <h3>Bevorstehende Besondere Ausgaben</h3>
+        {% if remarkable_upcoming %}
+            <ul>
+            {% for expense in remarkable_upcoming %}
+                <li>
+                    <strong>{{ expense.description }}</strong> (CHF {{ "%.2f"|format(expense.amount) }}) am {{ expense.expense_date }}
+                    {% if expense.category %}<br><small>Kategorie: {{ expense.category }}</small>{% endif %}
+                    {% if expense.is_estimated %}
+                        <span class="badge estimated-badge">Geschätzt</span>
+                        {% if expense.confirmed_value is not none %}
+                            <span class="badge confirmed-badge">Bestätigt: CHF {{ "%.2f"|format(expense.confirmed_value) }}</span>
+                        {% endif %}
+                    {% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>Keine bevorstehenden besonderen Ausgaben geplant.</p>
+        {% endif %}
+        <a href="{{ url_for('manage_remarkable_expenses') }}" class="btn btn-secondary">Ausgaben planen</a>
+    </div>
+
+    <div class="card">
+        <h3>Fällige Fixkosten zur Bestätigung</h3>
+        {% if fixed_costs_to_confirm %}
+            <p>Die folgenden Fixkosten sind diesen Monat fällig und müssen noch bestätigt werden:</p>
+            <ul>
+            {% for fc in fixed_costs_to_confirm %}
+                <li>
+                    <strong>{{ fc.name }}</strong> (CHF {{ "%.2f"|format(fc.planned_amount) }})
+                    {% if fc.is_estimated %}
+                        <span class="badge estimated-badge">Geschätzt</span>
+                        {% if fc.confirmed_value is not none %}
+                            <span class="badge confirmed-badge">Bestätigt: CHF {{ "%.2f"|format(fc.confirmed_value) }}</span>
+                        {% endif %}
+                    {% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+            <a href="{{ url_for('manage_fixed_costs') }}" class="btn btn-warning">Fixkosten bestätigen</a>
+        {% else %}
+            <p>Keine Fixkosten zur Bestätigung fällig.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Unkategorisierte Notizen (Dump Sheet)</h3>
+        {% if uncategorized_notes %}
+            <ul>
+                {% for note in uncategorized_notes %}
+                    <li>{{ note.note_text }} <small>({{ note.created_at }})</small></li>
+                {% endfor %}
+            </ul>
+            <a href="{{ url_for('dump_sheet') }}" class="btn btn-secondary">Notizen verwalten</a>
+        {% else %}
+            <p>Keine unkategorisierten Notizen.</p>
+        {% endif %}
+    </div>
+</section>
+
+<hr>
+
+<section class="prognosis-section">
+    <h2>Monatliche Finanzprognose</h2>
+    <p>Prognose der "normalen, variablen" Ausgaben und Einnahmen basierend auf historischen Daten und Ihren manuellen Anpassungen.</p>
+
+    <div class="chart-controls">
+        <label for="prognosisModel">Prognosemodell:</label>
+        <select id="prognosisModel" onchange="updateChart()">
+            <option value="sma">Einfacher Gleitender Durchschnitt (SMA)</option>
+            <option value="wma">Gewichteter Gleitender Durchschnitt (WMA)</option>
+        </select>
+        <div class="model-accuracy">
+            {% if sma_mae is not none %}
+                <span>SMA Fehler (MAE): CHF {{ "%.2f"|format(sma_mae) }}</span>
+            {% endif %}
+            {% if wma_mae is not none %}
+                <span>WMA Fehler (MAE): CHF {{ "%.2f"|format(wma_mae) }}</span>
+            {% endif %}
+            {% if sma_mae is not none and wma_mae is not none %}
+                {% if sma_mae < wma_mae %}
+                    <p>Empfehlung: SMA scheint genauer zu sein.</p>
+                {% elif wma_mae < sma_mae %}
+                    <p>Empfehlung: WMA scheint genauer zu sein.</p>
+                {% else %}
+                    <p>SMA und WMA sind derzeit gleich genau.</p>
+                {% endif %}
+            {% endif %}
+            {% if sma_mae is none and wma_mae is none %}
+                <p>Nicht genügend historische Daten für Modellgenauigkeit.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="financialChart"></canvas>
+    </div>
+
+    <a href="{{ url_for('manage_prognosis_overrides') }}" class="btn btn-secondary">Prognose-Details & Anpassung</a>
+</section>
+
+<hr>
+
+<section class="cashflow-section">
+    <h2>Cashflow-Übersicht & Prognose</h2>
+    <p>Hier sehen Sie den historischen und prognostizierten monatlichen Cashflow (Einnahmen - Ausgaben).</p>
+    <div class="chart-container">
+        <canvas id="cashflowChart"></canvas>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Daten vom Flask-Backend
+    const historicalLabels = JSON.parse('{{ chart_labels | tojson }}');
+    const historicalVariableExpenses = JSON.parse('{{ chart_data_variable_expenses | tojson }}');
+    const historicalIncomes = JSON.parse('{{ chart_data_incomes | tojson }}');
+
+    const prognosisMonths = JSON.parse('{{ prognosis_months | tojson }}');
+
+    const prognosisSMA_var_exp = JSON.parse('{{ prognosis_sma_var_exp | tojson }}');
+    const prognosisWMA_var_exp = JSON.parse('{{ prognosis_wma_var_exp | tojson }}');
+    const prognosisSMA_income = JSON.parse('{{ prognosis_sma_income | tojson }}');
+    const prognosisWMA_income = JSON.parse('{{ prognosis_wma_income | tojson }}');
+
+    let financialChart;
+    let cashflowChart; // Neues Chart-Objekt für Cashflow
+
+    function updateChart() {
+        const selectedModel = document.getElementById('prognosisModel').value;
+
+        let currentPrognosisVarExp;
+        let currentPrognosisIncome;
+
+        if (selectedModel === 'sma') {
+            currentPrognosisVarExp = prognosisSMA_var_exp;
+            currentPrognosisIncome = prognosisSMA_income;
+        } else { // wma
+            currentPrognosisVarExp = prognosisWMA_var_exp;
+            currentPrognosisIncome = prognosisWMA_income;
+        }
+
+        const allLabels = historicalLabels.concat(prognosisMonths);
+
+        // --- Haupt-Finanz-Chart (Variable Ausgaben & Einnahmen) ---
+        const ctxFinancial = document.getElementById('financialChart').getContext('2d');
+        if (financialChart) { financialChart.destroy(); }
+
+        financialChart = new Chart(ctxFinancial, {
+            type: 'line',
+            data: {
+                labels: allLabels,
+                datasets: [
+                    {
+                        label: 'Historische Variable Ausgaben',
+                        data: historicalVariableExpenses.map((val, idx) => (historicalLabels.length > idx ? val : null)),
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1,
+                        fill: false,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Prognose Variable Ausgaben',
+                        data: Array(historicalLabels.length).fill(null).concat(currentPrognosisVarExp),
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderDash: [5, 5],
+                        tension: 0.1,
+                        fill: false,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Historische Einnahmen',
+                        data: historicalIncomes.map((val, idx) => (historicalLabels.length > idx ? val : null)),
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1,
+                        fill: false,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Prognose Einnahmen',
+                        data: Array(historicalLabels.length).fill(null).concat(currentPrognosisIncome),
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderDash: [5, 5],
+                        tension: 0.1,
+                        fill: false,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false, title: { display: true, text: 'Betrag (CHF)' } },
+                    x: { title: { display: true, text: 'Monat' } }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: { label: function(context) { return context.dataset.label + ': CHF ' + context.parsed.y.toFixed(2); } }
+                    }
+                }
+            }
+        });
+
+        // --- Cashflow Chart ---
+        const ctxCashflow = document.getElementById('cashflowChart').getContext('2d');
+        if (cashflowChart) { cashflowChart.destroy(); }
+
+        // Berechne historischen Cashflow
+        const historicalCashflow = historicalIncomes.map((income, index) => {
+            const varExp = historicalVariableExpenses[index] || 0; // Handle potential nulls
+            const fixedExp = historicalFixedExpenses[index] || 0; // Assuming you pass this from backend
+            const remarkableExp = historicalRemarkableExpenses[index] || 0; // Assuming you pass this
+            return income - varExp - fixedExp - remarkableExp;
+        });
+
+        // Berechne prognostizierten Cashflow
+        const prognosisCashflow = currentPrognosisIncome.map((income, index) => {
+            const varExp = currentPrognosisVarExp[index] || 0;
+            // Annahme: Fixkosten und Remarkable Expenses für Prognose sind konstant oder werden separat übergeben
+            // Für eine einfache Prognose nehmen wir hier nur die variablen Ausgaben
+            // Realistisch müsste man hier auch die prognostizierten Fixkosten und Remarkable Expenses einbeziehen
+            // Für den Moment: Einfachheit halber nur variable Ausgaben
+            return income - varExp;
+        });
+
+        const allCashflowLabels = historicalLabels.concat(prognosisMonths);
+        const allCashflowData = historicalCashflow.concat(prognosisCashflow);
+
+
+        cashflowChart = new Chart(ctxCashflow, {
+            type: 'bar', // Balkendiagramm für Cashflow
+            data: {
+                labels: allCashflowLabels,
+                datasets: [
+                    {
+                        label: 'Monatlicher Cashflow (CHF)',
+                        data: allCashflowData,
+                        backgroundColor: allCashflowData.map(value => value >= 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
+                        borderColor: allCashflowData.map(value => value >= 0 ? 'rgb(75, 192, 192)' : 'rgb(255, 99, 132)'),
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Betrag (CHF)' } },
+                    x: { title: { display: true, text: 'Monat' } }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: { label: function(context) { return context.dataset.label + ': CHF ' + context.parsed.y.toFixed(2); } }
+                    }
+                }
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', updateChart);
+</script>
+{% endblock %}

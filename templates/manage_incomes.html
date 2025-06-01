@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Einnahmen - AnydayTool{% endblock %} {# UMBENENNUNG #}
+
+{% block content %}
+<section class="form-container">
+    <h2>Neue Einnahmequelle hinzufügen</h2>
+    <form method="POST">
+        <input type="hidden" name="action" value="add_income">
+        <div class="form-group">
+            <label for="source">Quelle der Einnahme (z.B. Gehalt, Nebenjob):</label>
+            <input type="text" id="source" name="source" required>
+        </div>
+        <div class="form-group">
+            <label for="amount">Betrag (CHF):</label>
+            <input type="number" step="0.01" id="amount" name="amount" required>
+        </div>
+        <div class="form-group">
+            <label for="frequency">Häufigkeit:</label>
+            <select id="frequency" name="frequency" required>
+                <option value="monthly">Monatlich</option>
+                <option value="yearly">Jährlich</option>
+                <option value="one-time">Einmalig</option>
+            </select>
+        </div>
+        <div class="form-group checkbox-group"> {# NEU #}
+            <input type="checkbox" id="is_estimated_income" name="is_estimated" class="form-checkbox">
+            <label for="is_estimated_income">Geschätzter Betrag?</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Einnahmequelle hinzufügen</button>
+    </form>
+</section>
+
+<section class="data-overview mt-4">
+    <h2>Übersicht deiner Einnahmequellen</h2>
+    {% if incomes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Quelle</th>
+                    <th>Betrag (Netto)</th>
+                    <th>Häufigkeit</th>
+                    <th>Status</th> {# NEU #}
+                    <th>Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for income in incomes %}
+                    <tr>
+                        <td>{{ income.source }}</td>
+                        <td>CHF {{ "%.2f"|format(income.amount) }}</td>
+                        <td>{{ income.frequency | capitalize }}</td>
+                        <td>
+                            {% if income.is_estimated %}
+                                <span class="badge estimated-badge">Geschätzt</span>
+                                {% if income.confirmed_value is not none %}
+                                    <span class="badge confirmed-badge">Bestätigt: CHF {{ "%.2f"|format(income.confirmed_value) }} (am {{ income.confirmed_date }})</span>
+                                {% else %}
+                                    {# Formular zum Bestätigen des geschätzten Wertes #}
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="action" value="confirm_income">
+                                        <input type="hidden" name="income_id" value="{{ income.id }}">
+                                        <input type="number" step="0.01" name="confirmed_value" placeholder="Bestätigter Wert" required>
+                                        <input type="date" name="confirmed_date" value="{{ date.today().strftime('%Y-%m-%d') }}" required>
+                                        <button type="submit" class="btn btn-info btn-small">Bestätigen</button>
+                                    </form>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge exact-badge">Exakt</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="action" value="delete_income">
+                                <input type="hidden" name="income_id" value="{{ income.id }}">
+                                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Bist du sicher, dass du diese Einnahmequelle löschen möchtest?');">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Noch keine Einnahmequellen hinzugefügt.</p>
+    {% endif %}
+</section>
+{% endblock %}

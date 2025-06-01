@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Besondere Ausgaben - AnydayTool{% endblock %} {# UMBENENNUNG #}
+
+{% block content %}
+<section class="form-container">
+    <h2>Neue Besondere Ausgabe hinzufügen</h2>
+    <form method="POST">
+        <input type="hidden" name="action" value="add_expense">
+        <div class="form-group">
+            <label for="description">Beschreibung (z.B. Neues Sofa, Ferien Thailand):</label>
+            <input type="text" id="description" name="description" required>
+        </div>
+        <div class="form-group">
+            <label for="amount">Betrag (CHF):</label>
+            <input type="number" step="0.01" id="amount" name="amount" required>
+        </div>
+        <div class="form-group">
+            <label for="expense_date">Datum der Ausgabe:</label>
+            <input type="date" id="expense_date" name="expense_date" value="{{ date.today().strftime('%Y-%m-%d') }}" required>
+        </div>
+        <div class="form-group">
+            <label for="category">Kategorie (optional):</label>
+            <input type="text" id="category" name="category">
+        </div>
+        <div class="form-group checkbox-group"> {# NEU #}
+            <input type="checkbox" id="is_estimated_expense" name="is_estimated" class="form-checkbox">
+            <label for="is_estimated_expense">Geschätzter Betrag?</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Ausgabe hinzufügen</button>
+    </form>
+</section>
+
+<section class="data-overview mt-4">
+    <h2>Übersicht deiner Besonderen Ausgaben</h2>
+    {% if remarkable_expenses %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Beschreibung</th>
+                    <th>Betrag (CHF)</th>
+                    <th>Datum</th>
+                    <th>Kategorie</th>
+                    <th>Status</th> {# NEU #}
+                    <th>Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for expense in remarkable_expenses %}
+                    <tr>
+                        <td>{{ expense.description }}</td>
+                        <td>CHF {{ "%.2f"|format(expense.amount) }}</td>
+                        <td>{{ expense.expense_date }}</td>
+                        <td>{{ expense.category | default('N/A') }}</td>
+                        <td>
+                            {% if expense.is_estimated %}
+                                <span class="badge estimated-badge">Geschätzt</span>
+                                {% if expense.confirmed_value is not none %}
+                                    <span class="badge confirmed-badge">Bestätigt: CHF {{ "%.2f"|format(expense.confirmed_value) }} (am {{ expense.confirmed_date }})</span>
+                                {% else %}
+                                    {# Formular zum Bestätigen des geschätzten Wertes #}
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="action" value="confirm_expense">
+                                        <input type="hidden" name="expense_id" value="{{ expense.id }}">
+                                        <input type="number" step="0.01" name="confirmed_value" placeholder="Bestätigter Wert" required>
+                                        <input type="date" name="confirmed_date" value="{{ date.today().strftime('%Y-%m-%d') }}" required>
+                                        <button type="submit" class="btn btn-info btn-small">Bestätigen</button>
+                                    </form>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge exact-badge">Exakt</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="action" value="delete_expense">
+                                <input type="hidden" name="expense_id" value="{{ expense.id }}">
+                                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Bist du sicher, dass du diese Ausgabe löschen möchtest?');">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Noch keine besonderen Ausgaben hinzugefügt.</p>
+    {% endif %}
+</section>
+{% endblock %}

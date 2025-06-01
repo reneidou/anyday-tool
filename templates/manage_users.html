@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Benutzerverwaltung - FamilyTool{% endblock %}
+
+{% block content %}
+<section class="form-container">
+    <h2>Neuen Benutzer hinzufügen</h2>
+    <form method="POST">
+        <input type="hidden" name="action" value="add_user">
+        <div class="form-group">
+            <label for="username">Benutzername:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Passwort:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+            <label for="role">Rolle:</label>
+            <select id="role" name="role" required>
+                <option value="member">Mitglied</option>
+                <option value="admin">Administrator</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Benutzer hinzufügen</button>
+    </form>
+</section>
+
+<section class="data-overview mt-4">
+    <h2>Aktuelle Benutzer</h2>
+    {% if users %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Benutzername</th>
+                    <th>Rolle</th>
+                    <th>Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.role | capitalize }}</td>
+                        <td>
+                            {% if user.id != session.user_id and user.username != 'admin' %}
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="action" value="delete_user">
+                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Bist du sicher, dass du den Benutzer {{ user.username }} löschen möchtest? Alle seine Daten werden ebenfalls gelöscht!');">Löschen</button>
+                            </form>
+                            {% else %}
+                                <span class="text-muted">Kann nicht gelöscht werden</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Keine Benutzer gefunden.</p>
+    {% endif %}
+</section>
+{% endblock %}

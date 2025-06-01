@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Prognose-Anpassung - FamilyTool{% endblock %}
+
+{% block content %}
+<section class="form-container">
+    <h2>Manuelle Prognose-Anpassungen</h2>
+    <p>Hier können Sie individuelle Prognosewerte für Variable Ausgaben und Einnahmen für zukünftige Monate festlegen. Leere Felder werden mit den berechneten Standardwerten gefüllt.</p>
+
+    <form method="POST" action="{{ url_for('manage_prognosis_overrides') }}" class="form-grid">
+        <table>
+            <thead>
+                <tr>
+                    <th>Monat</th>
+                    <th>Standard Variable Ausgaben (SMA)</th>
+                    <th>Manuelle Variable Ausgaben (CHF)</th>
+                    <th>Standard Einnahmen (Monatlich)</th>
+                    <th>Manuelle Einnahmen (CHF)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for month_data in prognosis_data %}
+                <tr>
+                    <td>{{ month_data.month }}</td>
+                    <td>CHF {{ "%.2f"|format(month_data.default_variable_expenses) }}</td>
+                    <td>
+                        <input type="number" step="0.01" name="variable_expenses_{{ month_data.month }}"
+                               value="{{ "%.2f"|format(month_data.override_variable_expenses) if month_data.override_variable_expenses is not none }}"
+                               placeholder="Standardwert">
+                    </td>
+                    <td>CHF {{ "%.2f"|format(month_data.default_income) }}</td>
+                    <td>
+                        <input type="number" step="0.01" name="income_{{ month_data.month }}"
+                               value="{{ "%.2f"|format(month_data.override_income) if month_data.override_income is not none }}"
+                               placeholder="Standardwert">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Anpassungen speichern</button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Abbrechen</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
